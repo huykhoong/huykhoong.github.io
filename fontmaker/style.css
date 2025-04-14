@@ -1,0 +1,32 @@
+
+.pixel-grid { display: grid; gap: 1px; }
+.pixel {
+  background: #f8f8f8;
+  border: 1px solid #ccc;
+  width: 16px; height: 16px;
+  cursor: pointer;
+}
+.pixel.active { background: #000; }
+.char-item {
+  display: inline-block;
+  width: 28px;
+  text-align: center;
+  margin: 2px;
+  padding: 4px;
+  border: 1px solid #ccc;
+  cursor: pointer;
+}
+.char-item:hover { background: #eee; }
+#previewArea canvas {
+  image-rendering: pixelated;
+}
+#loadingOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.8);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  font-size: 1.5rem;
+}

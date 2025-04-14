@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Font Bitmap Pro (Upgraded)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/opentype.js@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+</head>
+<body>
+  <body>
+    <!-- Add modal structure -->
+    <div class="modal fade" id="helpModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Hướng dẫn sử dụng</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <ol>
+              <li>Chọn chiều cao của bộ font bạn tính làm</li>
+              <li>Upload file font TTF</li>
+              <li>Các ký tự cơ bản sẽ tự động được tạo kể cả ký tự space</li>
+              <li>*Thêm ký tự đang lỗi nhưng mình đã tự làm full ký tự tiếng Việt rồi*</li>
+              <li>Click vào ký tự để chỉnh sửa bitmap</li>
+              <li>Điều chỉnh độ rộng bằng nút + và -, có thể điều chỉnh chiều rộng của khoảng space tại đây</li>
+              <li>Nhấn 'Lưu bitmap' sau khi chỉnh sửa (nếu có)</li>
+              <li>Export ra file .h và sử dụng</li>
+            </ol>
+            <hr>
+            <small class="text-muted">© 2025 HuyKhong</small>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Đã hiểu</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    
+    
+<div id="loadingOverlay"><div>Đang load font & render ký tự...</div></div>
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="text-center mb-0">Font maker for Makefont</h2>
+    <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#helpModal">
+      <i class="bi bi-question-circle"></i> Hướng dẫn
+    </button>
+  </div>
+  <div class="row mb-3">
+    <div class="col-md-4">
+      <label class="form-label">Upload Font (.ttf)</label>
+      <input type="file" class="form-control" id="fontFile" accept=".ttf" />
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Chiều cao (px)</label>
+      <input type="number" class="form-control" id="fontHeight" value="16" min="8" max="32" />
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Số pixel cho dấu cách (space)</label>
+      <input type="number" class="form-control" id="spaceWidth" value="4" min="1" max="32" />
+    </div> 
+  </div>
+
+  <div class="input-group mb-2">
+    <input type="text" class="form-control" id="customCharInput" maxlength="2" placeholder="Nhập ký tự tùy chọn (VD: 中, ♥...)">
+    <button class="btn btn-outline-primary" id="addCharBtn">Thêm</button>
+  </div> 
+
+  <div class="mb-3">
+    <label class="form-label">Danh sách ký tự</label>
+    <div id="charList" class="border p-2" style="height:120px; overflow-y:auto;"></div>
+  </div>
+
+  <div class="mb-3 d-flex align-items-center">
+    <label class="form-label me-3">Chiều rộng ký tự:</label>
+    <button class="btn btn-outline-secondary btn-sm me-2" onclick="adjustWidth(-1)">-</button>
+    <button class="btn btn-outline-secondary btn-sm" onclick="adjustWidth(1)">+</button>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Vẽ bitmap</label>
+    <div id="pixelGrid" class="pixel-grid border p-2"></div>
+        <button class="btn btn-primary mt-2" id="saveBitmapBtn">💾 Lưu bitmap hiện tại</button>
+  </div>
+
+  <div class="mb-3 text-end">
+    <div class="mb-3 d-flex justify-content-end align-items-center">
+      <label class="form-label me-2"></label>
+      <input type="text" class="form-control me-2" id="fontName" placeholder="Ví dụ: MyCustomFont" value="TenFont" style="width: auto;">
+      <!-- <button class="btn btn-success me-2" id="exportBtn">Export .h</button> -->
+      <button class="btn btn-warning" id="exportBtn">Xuất Font (.h)</button>
+    </div>
+  </div>
+<div>
+  <div class="mb-3">
+    <label class="form-label">Preview văn bản</label>
+    <textarea class="form-control" id="textInput" rows="2">Lúc ấy, chú hươu cao cổ bế đứa trẻ ngồi xích đu trên phố.</textarea>
+    <div id="previewArea" class="border p-3 mt-2" style="min-height: 80px;"></div>
+  </div>
+
+  <textarea class="form-control mt-3" rows="10" id="outputCode" placeholder="Mã .h sẽ xuất hiện ở đây..."></textarea>
+</div>
+
+<script>
+let currentChar = '';
+let font = null;
+let charBitmaps = {};
+let fontName = '' ;
+
+function createGrid(width, height) {
+  const pixelGrid = document.getElementById('pixelGrid');
+  pixelGrid.innerHTML = '';
+  pixelGrid.style.gridTemplateColumns = `repeat(${width}, 16px)`;
+  pixelGrid.style.gridTemplateRows = `repeat(${height}, 16px)`;
+  for (let i = 0; i < width * height; i++) {
+    const div = document.createElement('div');
+    div.className = 'pixel';
+    div.onclick = () => div.classList.toggle('active');
+    pixelGrid.appendChild(div);
+  }
+}
+
+document.getElementById('fontFile').addEventListener('change', (e) => {
+  fontName = e.target.files[0].name.replace(/\.[^/.]+$/, "");
+  cleanName = fontName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9]/g, '');
+  const inputFontName = document.getElementById('fontName');
+  if (cleanName &&  parseInt(document.getElementById('fontHeight').value)) {
+    inputFontName.value = cleanName + parseInt(document.getElementById('fontHeight').value) + "pt";
+  }
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    font = opentype.parse(event.target.result);
+    loadCharacters();
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+function loadCharacters() {
+  const chars =
+  'AĂÂBCDĐEÊFGHIJKLMNOÔƠPQRSTUƯVWXYZ' + // ✅ Chữ hoa không dấu + đủ Â Ô
+  'ÁÀẢÃẠẮẰẲẴẶẤẦẨẪẬÉÈẺẼẸẾỀỂỄỆÍÌỈĨỊ' +
+  'ÓÒỎÕỌỐỒỔỖỘỚỜỞỠỢÚÙỦŨỤỨỪỬỮỰÝỲỶỸỴ' + // ✅ Chữ HOA có dấu
+  'abcdđêêfghijklmnopqrstuvwxyzâôơư' + // ✅ Chữ thường không dấu + thêm â ô
+  'áàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩị' +
+  'óòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵ' + // ✅ Chữ thường có dấu
+  '0123456789.,:;!?()[]{}-+=*/'; 
+  const charList = document.getElementById('charList');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  charList.innerHTML = '';
+  charBitmaps = {};
+  loadingOverlay.style.display = 'flex';
+  setTimeout(() => {
+    chars.split('').forEach(ch => {
+      addCharToList(ch);
+      selectChar(ch);
+    });
+    loadingOverlay.style.display = 'none';
+    renderPreview();
+  }, 100);
+}
+
+document.getElementById('addCharBtn').addEventListener('click', () => {
+  const val = document.getElementById('customCharInput').value.trim();
+  if (!val) return;
+  for (const ch of val) {
+    addCharToList(ch);
+    selectChar(ch);
+  }
+  document.getElementById('customCharInput').value = '';
+  renderPreview();
+});
+
+function addCharToList(ch) {
+  const span = document.createElement('span');
+  span.className = 'char-item';
+  span.textContent = ch;
+  span.onclick = () => selectChar(ch);
+  document.getElementById('charList').appendChild(span);
+}
+
+function selectChar(ch) {
+  currentChar = ch;
+  const height = parseInt(document.getElementById('fontHeight').value);
+  
+  if (charBitmaps[ch]) {
+    const data = charBitmaps[ch];
+    createGrid(data.width, data.height);
+    const pixels = [...document.getElementById('pixelGrid').children];
+    data.bitmap.forEach((rowByte, row) => {
+      for (let col = 0; col < data.width; col++) {
+        const bit = (rowByte >> col) & 1;
+        if (bit) pixels[row * data.width + col].classList.add('active');
+      }
+    });
+    return;
+  }
+
+  if (ch === ' ') {
+    const width = parseInt(document.getElementById('spaceWidth').value);
+    const bitmap = new Array(height).fill(0);
+    charBitmaps[ch] = { width, height, bitmap };
+    createGrid(width, height);
+    return;
+  }
+
+  // Tăng canvas height thêm 25% để chứa dấu
+  const canvas = document.createElement('canvas');
+  canvas.width = height;
+  canvas.height = Math.ceil(height * 1.25); // Tăng chiều cao canvas
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  let hasGlyph = false;
+  if (font) {
+    const glyph = font.charToGlyph(ch);
+    if (glyph && glyph.index > 0) {
+      // Dịch chuyển baseline xuống thêm 25% height
+      const baseline = Math.ceil(height * 0.95); // Tăng baseline
+      const path = glyph.getPath(0, baseline, height);
+      path.draw(ctx);
+      hasGlyph = true;
+    }
+  }
+
+  // Lấy chiều cao thực của canvas đã tăng
+  const actualHeight = canvas.height;
+  const imageData = ctx.getImageData(0, 0, height, actualHeight);
+  let left = height - 1, right = 0;
+  let foundPixel = false;
+  
+  // Quét toàn bộ canvas mới
+  for (let y = 0; y < actualHeight; y++) {
+    for (let x = 0; x < height; x++) {
+      const idx = (y * height + x) * 4;
+      if (imageData.data[idx + 3] > 128) {
+        if (x < left) left = x;
+        if (x > right) right = x;
+        foundPixel = true;
+      }
+    }
+  }
+
+  const realWidth = foundPixel ? (right - left + 1) : 0;
+  const finalWidth = realWidth + 1;
+  const finalBitmap = [];
+
+  // Tạo bitmap với chiều cao mới
+  if (foundPixel) {
+    for (let y = 0; y < actualHeight; y++) {
+      let row = 0;
+      for (let x = left; x <= right; x++) {
+        const idx = (y * height + x) * 4;
+        if (imageData.data[idx + 3] > 128) {
+          row |= (1 << (x - left));
+        }
+      }
+      finalBitmap.push(row);
+    }
+  } else {
+    for (let y = 0; y < actualHeight; y++) {
+      finalBitmap.push(0);
+    }
+  }
+
+  // Lưu với chiều cao mới
+  charBitmaps[ch] = { width: finalWidth, height: actualHeight, bitmap: finalBitmap };
+  createGrid(finalWidth, actualHeight);
+
+  const pixels = [...document.getElementById('pixelGrid').children];
+  finalBitmap.forEach((rowByte, row) => {
+    for (let col = 0; col < finalWidth; col++) {
+      const bit = (rowByte >> (finalWidth - 1 - col)) & 1;
+      if (bit) {
+        pixels[row * finalWidth + col].classList.add('active');
+      }
+    }
+  });
+
+  renderPreview();
+}
+
+function adjustWidth(delta) {
+  const data = charBitmaps[currentChar];
+  if (!data) return;
+
+  let { width, height, bitmap } = data;
+  const newWidth = Math.max(1, Math.min(32, width + delta));
+  const newBitmap = [];
+
+  for (let row of bitmap) {
+    if (delta > 0) {
+      row <<= delta;
+    } else {
+      row >>= -delta;
+    }
+    row &= (1 << newWidth) - 1;
+    newBitmap.push(row);
+  }
+
+  charBitmaps[currentChar] = { width: newWidth, height, bitmap: newBitmap };
+  createGrid(newWidth, height);
+  const pixels = [...document.getElementById('pixelGrid').children];
+  newBitmap.forEach((rowByte, row) => {
+    for (let col = 0; col < newWidth; col++) {
+      const bit = (rowByte >> (newWidth - 1 - col)) & 1;
+      if (bit) pixels[row * newWidth + col].classList.add('active');
+    }
+  });
+
+  renderPreview();
+}
+const utf8Table = [
+    0x00000020, // Space (index 0)
+    0x0000C380, // À (index 1)
+    0x0000C381, // Á (index 2)
+    0x00E1BAA2, // Ả (index 3)
+    0x0000C383, // Ã (index 4)
+    0x00E1BAA0, // Ạ (index 5)
+    0x0000C482, // Ă (index 6)
+    0x00E1BAB0, // Ằ (index 7)
+    0x00E1BAAE, // Ắ (index 8)
+    0x00E1BAB2, // Ẳ (index 9)
+    0x00E1BAB4, // Ẵ (index 10)
+    0x00E1BAB6, // Ặ (index 11)
+	0x0000C382, //Â
+	0x00E1BAA6, //Ầ
+	0x00E1BAA4, //Ấ
+	0x00E1BAA8, //Ẩ
+	0x00E1BAAA, //Ẫ
+	0x00E1BAAC, //Ậ
+	0x0000C490, //Đ
+	0x0000C388, //È
+	0x0000C389, //É
+	0x00E1BABA, //Ẻ
+	0x00E1BABC, //Ẽ
+	0x00E1BAB8, //Ẹ
+	0x0000C38A, //Ê
+	0x00E1BB80, //Ề
+	0x00E1BABE, //Ế
+	0x00E1BB82, //Ể
+	0x00E1BB84, //Ễ
+	0x00E1BB86, //Ệ
+	0x0000C38C, //Ì
+	0x0000C38D, //Í
+	0x00000020, // 
+	0x00000021, //!
+	0x00000022, //"
+	0x00000023, //#
+	0x00000024, //$
+	0x00000025, //%
+	0x00000026, //&
+	0x00E28098, //‘
+	0x00000028, //(
+	0x00000029, //)
+	0x0000002A, //*
+	0x0000002B, //+
+	0x0000002C, //,
+	0x00E28093, //–
+	0x0000002E, //.
+	0x0000002F, ///
+	0x00000030, //0
+	0x00000031, //1
+	0x00000032, //2
+	0x00000033, //3
+	0x00000034, //4
+	0x00000035, //5
+	0x00000036, //6
+	0x00000037, //7
+	0x00000038, //8
+	0x00000039, //9
+	0x0000003A, //:
+	0x0000003B, //;
+	0x0000003C, //<
+	0x0000003D, //=
+	0x0000003E, //>
+	0x0000003F, //?
+	0x00000040, //@
+	0x00000041, //A
+	0x00000042, //B
+	0x00000043, //C
+	0x00000044, //D
+	0x00000045, //E
+	0x00000046, //F
+	0x00000047, //G
+	0x00000048, //H
+	0x00000049, //I
+	0x0000004A, //J
+	0x0000004B, //K
+	0x0000004C, //L
+	0x0000004D, //M
+	0x0000004E, //N
+	0x0000004F, //O
+	0x00000050, //P
+	0x00000051, //Q
+	0x00000052, //R
+	0x00000053, //S
+	0x00000054, //T
+	0x00000055, //U
+	0x00000056, //V
+	0x00000057, //W
+	0x00000058, //X
+	0x00000059, //Y
+	0x0000005A, //Z
+	0x0000005B, //[
+	0x0000005C, //
+	0x0000005D, //]
+	0x0000005E, //^
+	0x0000005F, //_
+	0x00000060, //`
+	0x00000061, //a
+	0x00000062, //b
+	0x00000063, //c
+	0x00000064, //d
+	0x00000065, //e
+	0x00000066, //f
+	0x00000067, //g
+	0x00000068, //h
+	0x00000069, //i
+	0x0000006A, //j
+	0x0000006B, //k
+	0x0000006C, //l
+	0x0000006D, //m
+	0x0000006E, //n
+	0x0000006F, //o
+	0x00000070, //p
+	0x00000071, //q
+	0x00000072, //r
+	0x00000073, //s
+	0x00000074, //t
+	0x00000075, //u
+	0x00000076, //v
+	0x00000077, //w
+	0x00000078, //x
+	0x00000079, //y
+	0x0000007A, //z
+	0x0000007B, //{
+	0x0000007C, //|
+	0x0000007D, //}
+	0x0000007E, //~
+	0x00E1BB88, //Ỉ
+	0x0000C4A8, //Ĩ
+	0x00E1BB8A, //Ị
+	0x0000C392, //Ò
+	0x0000C393, //Ó
+	0x00E1BB8E, //Ỏ
+	0x0000C395, //Õ
+	0x00E1BB8C, //Ọ
+	0x0000C394, //Ô
+	0x00E1BB92, //Ồ
+	0x00E1BB90, //Ố
+	0x00E1BB94, //Ổ
+	0x00E1BB96, //Ỗ
+	0x00E1BB98, //Ộ
+	0x0000C6A0, //Ơ
+	0x00E1BB9C, //Ờ
+	0x00E1BB9A, //Ớ
+	0x00E1BB9E, //Ở
+	0x00E1BBA0, //Ỡ
+	0x00E1BBA2, //Ợ
+	0x0000C399, //Ù
+	0x0000C39A, //Ú
+	0x00E1BBA6, //Ủ
+	0x0000C5A8, //Ũ
+	0x00E1BBA4, //Ụ
+	0x0000C6AF, //Ư
+	0x00E1BBAA, //Ừ
+	0x00E1BBA8, //Ứ
+	0x00E1BBAC, //Ử
+	0x00E1BBAE, //Ữ
+	0x00E1BBB0, //Ự
+	0x00E1BBB2, //Ỳ
+	0x0000C39D, //Ý
+	0x00E1BBB6, //Ỷ
+	0x00E1BBB8, //Ỹ
+	0x00E1BBB4, //Ỵ
+	0x0000C3A0, //à
+	0x0000C3A1, //á
+	0x00E1BAA3, //ả
+	0x0000C3A3, //ã
+	0x00E1BAA1, //ạ
+	0x0000C483, //ă
+	0x00E1BAB1, //ằ
+	0x00E1BAAF, //ắ
+	0x00E1BAB3, //ẳ
+	0x00E1BAB5, //ẵ
+	0x00E1BAB7, //ặ
+	0x0000C3A2, //â
+	0x00E1BAA7, //ầ
+	0x00E1BAA5, //ấ
+	0x00E1BAA9, //ẩ
+	0x00E1BAAB, //ẫ
+	0x00E1BAAD, //ậ
+	0x0000C491, //đ
+	0x0000C3A8, //è
+	0x0000C3A9, //é
+	0x00E1BABB, //ẻ
+	0x00E1BABD, //ẽ
+	0x00E1BAB9, //ẹ
+	0x0000C3AA, //ê
+	0x00E1BB81, //ề
+	0x00E1BABF, //ế
+	0x00E1BB83, //ể
+	0x00E1BB85, //ễ
+	0x00E1BB87, //ệ
+	0x0000C3AC, //ì
+	0x0000C3AD, //í
+	0x00E1BB89, //ỉ
+	0x0000C4A9, //ĩ
+	0x00E1BB8B, //ị
+	0x0000C3B2, //ò
+	0x0000C3B3, //ó
+	0x00E1BB8F, //ỏ
+	0x0000C3B5, //õ
+	0x00E1BB8D, //ọ
+	0x0000C3B4, //ô
+	0x00E1BB93, //ồ
+	0x00E1BB91, //ố
+	0x00E1BB95, //ổ
+	0x00E1BB97, //ỗ
+	0x00E1BB99, //ộ
+	0x0000C6A1, //ơ
+	0x00E1BB9D, //ờ
+	0x00E1BB9B, //ớ
+	0x00E1BB9F, //ở
+	0x00E1BBA1, //ỡ
+	0x00E1BBA3, //ợ
+	0x0000C3B9, //ù
+	0x0000C3BA, //ú
+	0x00E1BBA7, //ủ
+	0x0000C5A9, //ũ
+	0x00E1BBA5, //ụ
+	0x0000C6B0, //ư
+	0x00E1BBAB, //ừ
+	0x00E1BBA9, //ứ
+	0x00E1BBAD, //ử
+	0x00E1BBAF, //ữ
+	0x00E1BBB1, //ự
+	0x00E1BBB3, //ỳ
+	0x0000C3BD, //ý
+	0x00E1BBB7, //ỷ
+	0x00E1BBB9, //ỹ
+	0x00E1BBB5, //ỵ
+	0x00E4BDA0, //你
+	0x00E5A5BD, //好
+	0x00E69C8B, //朋
+	0x00E58F8B, //友
+	0x00E29DA4, //❤
+	0x0000C2B0, //°
+    //... (thêm tất cả các ký tự khác theo đúng thứ tự trong IOT47_UTF8.h)
+  ];
+  
+  function reverseByteBits(byte) {
+    let result = 0;
+    for (let i = 0; i < 8; i++) {
+      result <<= 1; // Dịch trái kết quả
+      if (byte & 1) { // Nếu bit cuối của byte gốc là 1
+        result |= 1;  // Set bit cuối của kết quả là 1
+      }
+      byte >>= 1; // Dịch phải byte gốc để xét bit tiếp theo
+    }
+    return result;
+  }
+
+  document.getElementById('exportBtn').addEventListener('click', () => {
+  const fontName = document.getElementById('fontName').value || "CustomFont";
+  const fontHeight = parseInt(document.getElementById('fontHeight').value);
+  const spaceWidth = parseInt(document.getElementById('spaceWidth').value);
+  
+  // Tạo bảng ánh xạ ký tự
+  const charToIndexMap = {};
+  utf8Table.forEach((value, index) => {
+    charToIndexMap[decodeUtf8(value)] = index;
+  });
+
+  // Dữ liệu font - bắt đầu với mid line
+  let fontData = [Math.floor(fontHeight * 0.75)];
+  let charMap = Array(utf8Table.length).fill(0);
+
+  // Xử lý từng ký tự
+  Object.keys(charBitmaps).forEach(char => {
+    if (!charToIndexMap.hasOwnProperty(char)) return;
+    
+    const index = charToIndexMap[char];
+    let data = charBitmaps[char];
+    
+    // Xử lý khoảng trắng
+    if (char === ' ') {
+      data = {
+        width: spaceWidth,
+        height: fontHeight,
+        bitmap: new Array(fontHeight).fill(0)
+      };
+    }
+    
+    const bytesPerRow = Math.ceil(data.width / 8);
+    const startY = data.height < fontData[0] 
+      ? fontData[0] - data.height 
+      : 0;
+
+    // Lưu vị trí bắt đầu
+    charMap[index] = fontData.length + 4;
+
+    fontData.push(
+      data.width,  
+      data.height,
+      bytesPerRow,
+      startY
+    );
+
+    // Thêm dữ liệu bitmap với xử lý đặc biệt cho ký tự hẹp
+    for (let row = 0; row < data.height; row++) {
+      let rowData = data.bitmap[row] || 0;
+      
+      // Đóng gói thành bytes
+      for (let b = 0; b < bytesPerRow; b++) {
+      // Lấy byte thứ b (0 là LSB, 1 là byte tiếp theo, ...)
+      const originalByte = (rowData >> (8 * b)) & 0xFF;
+      // *** SỬA ĐỔI: Đảo ngược các bit của byte trước khi push ***
+      const reversedByte = reverseByteBits(originalByte);
+      fontData.push(reversedByte); // Push byte đã đảo ngược bit
+    }
+    }
+  });
+
+  // Phần tạo file .h giữ nguyên như trước...
+  let output = `/*
+  ${fontName}.h - Font tiếng Việt UTF-8
+  Tạo bởi Font Bitmap Pro
+*/
+
+#ifndef _${fontName.toUpperCase()}_H_
+#define _${fontName.toUpperCase()}_H_
+
+#include <stdint.h>
+#include <avr/pgmspace.h>
+#include "MyFontMaker.h"
+
+const uint8_t ${fontName}_name[] PROGMEM = {`;
+
+  for (let i = 0; i < fontData.length; i++) {
+    if (i % 16 === 0) output += '\n  ';
+    output += `0x${fontData[i].toString(16).padStart(2, '0')},`;
+  }
+  output = output.slice(0, -1) + '\n};';
+
+  output += `\n\nconst uint16_t ${fontName}_map[] PROGMEM = {`;
+  for (let i = 0; i < charMap.length; i++) {
+    if (i % 12 === 0) output += '\n  ';
+    output += `0x${charMap[i].toString(16).padStart(4, '0')},`;
+  }
+  output = output.slice(0, -1) + '\n};';
+
+  output += `\n\nconst MyFont_typedef ${fontName} PROGMEM = {
+  ${fontName}_name,
+  ${fontName}_map
+};\n\n#endif`;
+
+  // Xuất file
+  const blob = new Blob([output], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${fontName}.h`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+// Hàm giải mã UTF-8 (đơn giản)
+function decodeUtf8(utf8Value) {
+  if (utf8Value <= 0x7F) return String.fromCharCode(utf8Value);
+  const bytes = [
+    (utf8Value >> 24) & 0xFF,
+    (utf8Value >> 16) & 0xFF,
+    (utf8Value >> 8) & 0xFF,
+    utf8Value & 0xFF
+  ];
+  let i = 0;
+  while (i < 4 && bytes[i] === 0) i++;
+  const validBytes = bytes.slice(i);
+  return new TextDecoder().decode(new Uint8Array(validBytes));
+}
+  
+  
+// Hàm giải mã UTF-8 (đơn giản)
+function decodeUtf8(utf8Value) {
+  if (utf8Value <= 0x7F) return String.fromCharCode(utf8Value);
+  const bytes = [
+    (utf8Value >> 24) & 0xFF,
+    (utf8Value >> 16) & 0xFF,
+    (utf8Value >> 8) & 0xFF,
+    utf8Value & 0xFF
+  ];
+  let i = 0;
+  while (i < 4 && bytes[i] === 0) i++;
+  const validBytes = bytes.slice(i);
+  return new TextDecoder().decode(new Uint8Array(validBytes));
+}
+
+document.getElementById('textInput').addEventListener('input', renderPreview);
+
+function renderPreview() {
+  const text = document.getElementById('textInput').value;
+  const spaceWidth = parseInt(document.getElementById('spaceWidth').value);
+  const previewArea = document.getElementById('previewArea');
+  previewArea.innerHTML = '';
+
+  for (const ch of text) {
+    const data = charBitmaps[ch];
+    if (!data) {
+      if (ch === ' ') {
+        const canvas = document.createElement('canvas');
+        canvas.width = spaceWidth;
+        canvas.height = parseInt(document.getElementById('fontHeight').value);
+        previewArea.appendChild(canvas);
+      }
+      continue;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = data.width;
+    canvas.height = data.height;
+    const ctx = canvas.getContext('2d');
+
+    data.bitmap.forEach((rowByte, y) => {
+      for (let x = 0; x < data.width; x++) {
+        if ((rowByte >> x) & 1) {
+          ctx.fillRect(x, y, 1, 1); // vẽ pixel theo chiều đúng
+        }
+      }
+    });
+
+    previewArea.appendChild(canvas);
+  }
+}
+
+document.getElementById("saveBitmapBtn").addEventListener("click", saveCurrentGrid);
+
+function saveCurrentGrid() {
+  const data = charBitmaps[currentChar];
+  if (!data) return;
+
+  const { width, height } = data;
+  const pixels = [...document.getElementById('pixelGrid').children];
+  const bitmap = [];
+
+  for (let row = 0; row < height; row++) {
+    let rowByte = 0;
+    for (let col = 0; col < width; col++) {
+      const i = row * width + col;
+      if (pixels[i].classList.contains('active')) {
+        rowByte |= (1 << col);  // ✅ không bị lật
+      }
+    }
+    bitmap.push(rowByte);
+  }
+
+  charBitmaps[currentChar].bitmap = bitmap;
+  renderPreview();
+}
+
+
+document.addEventListener('DOMContentLoaded', function() {
+  const helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
+  helpModal.show();
+});
+</script>
+
+<p>© 2025 HuyKhong</p>
+</body>
+</html>
